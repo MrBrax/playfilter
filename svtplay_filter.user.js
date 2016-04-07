@@ -9,9 +9,10 @@
 // @include     http://www.tv8play.se/*
 // @include     http://www.tv10play.se/*
 // @include     http://www.dplay.se/*
+// @include     https://www.twitch.tv/directory/*
 // @require		https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js
 // @updateURL 	http://files.dongers.net/userscripts/svtplay_filter.user.js
-// @version     1.35
+// @version     1.45
 // @grant       GM_getValue
 // @grant       GM_setValue
 // @grant       GM_addStyle
@@ -21,81 +22,81 @@
 // TODO: Transition from this cpu-intensive function below
 
 /*--- waitForKeyElements():  A utility function, for Greasemonkey scripts,
-    that detects and handles AJAXed content.
+	that detects and handles AJAXed content.
 
-    Usage example:
+	Usage example:
 
-        waitForKeyElements (
-            "div.comments"
-            , commentCallbackFunction
-        );
+		waitForKeyElements (
+			"div.comments"
+			, commentCallbackFunction
+		);
 
-        //--- Page-specific function to do what we want when the node is found.
-        function commentCallbackFunction (jNode) {
-            jNode.text ("This comment changed by waitForKeyElements().");
-        }
+		//--- Page-specific function to do what we want when the node is found.
+		function commentCallbackFunction (jNode) {
+			jNode.text ("This comment changed by waitForKeyElements().");
+		}
 
-    IMPORTANT: This function requires your script to have loaded jQuery.
+	IMPORTANT: This function requires your script to have loaded jQuery.
 */
 function waitForKeyElements ( selectorTxt, actionFunction, bWaitOnce, iframeSelector ) {
-    var targetNodes, btargetsFound;
+	var targetNodes, btargetsFound;
 
-    if (typeof iframeSelector == "undefined")
-        targetNodes     = $(selectorTxt);
-    else
-        targetNodes     = $(iframeSelector).contents ()
-                                           .find (selectorTxt);
+	if (typeof iframeSelector == "undefined")
+		targetNodes     = $(selectorTxt);
+	else
+		targetNodes     = $(iframeSelector).contents ()
+										   .find (selectorTxt);
 
-    if (targetNodes  &&  targetNodes.length > 0) {
-        btargetsFound   = true;
-        /*--- Found target node(s).  Go through each and act if they
-            are new.
-        */
-        targetNodes.each ( function () {
-            var jThis        = $(this);
-            var alreadyFound = jThis.data ('alreadyFound')  ||  false;
+	if (targetNodes  &&  targetNodes.length > 0) {
+		btargetsFound   = true;
+		/*--- Found target node(s).  Go through each and act if they
+			are new.
+		*/
+		targetNodes.each ( function () {
+			var jThis        = $(this);
+			var alreadyFound = jThis.data ('alreadyFound')  ||  false;
 
-            if (!alreadyFound) {
-                //--- Call the payload function.
-                var cancelFound     = actionFunction (jThis);
-                if (cancelFound)
-                    btargetsFound   = false;
-                else
-                    jThis.data ('alreadyFound', true);
-            }
-        } );
-    }
-    else {
-        btargetsFound   = false;
-    }
+			if (!alreadyFound) {
+				//--- Call the payload function.
+				var cancelFound     = actionFunction (jThis);
+				if (cancelFound)
+					btargetsFound   = false;
+				else
+					jThis.data ('alreadyFound', true);
+			}
+		} );
+	}
+	else {
+		btargetsFound   = false;
+	}
 
-    //--- Get the timer-control variable for this selector.
-    var controlObj      = waitForKeyElements.controlObj  ||  {};
-    var controlKey      = selectorTxt.replace (/[^\w]/g, "_");
-    var timeControl     = controlObj [controlKey];
+	//--- Get the timer-control variable for this selector.
+	var controlObj      = waitForKeyElements.controlObj  ||  {};
+	var controlKey      = selectorTxt.replace (/[^\w]/g, "_");
+	var timeControl     = controlObj [controlKey];
 
-    //--- Now set or clear the timer as appropriate.
-    if (btargetsFound  &&  bWaitOnce  &&  timeControl) {
-        //--- The only condition where we need to clear the timer.
-        clearInterval (timeControl);
-        delete controlObj [controlKey]
-    }
-    else {
-        //--- Set a timer, if needed.
-        if ( ! timeControl) {
-            timeControl = setInterval ( function () {
-                    waitForKeyElements (    selectorTxt,
-                                            actionFunction,
-                                            bWaitOnce,
-                                            iframeSelector
-                                        );
-                },
-                300
-            );
-            controlObj [controlKey] = timeControl;
-        }
-    }
-    waitForKeyElements.controlObj   = controlObj;
+	//--- Now set or clear the timer as appropriate.
+	if (btargetsFound  &&  bWaitOnce  &&  timeControl) {
+		//--- The only condition where we need to clear the timer.
+		clearInterval (timeControl);
+		delete controlObj [controlKey]
+	}
+	else {
+		//--- Set a timer, if needed.
+		if ( ! timeControl) {
+			timeControl = setInterval ( function () {
+					waitForKeyElements (    selectorTxt,
+											actionFunction,
+											bWaitOnce,
+											iframeSelector
+										);
+				},
+				300
+			);
+			controlObj [controlKey] = timeControl;
+		}
+	}
+	waitForKeyElements.controlObj   = controlObj;
 }
 
 SVTPlayFilter = {};
@@ -108,7 +109,7 @@ SVTPlayFilter.CurrentSite = "unknown";
 SVTPlayFilter.ConfigButton = "<img title='Config' class='hidebutton' width='16' height='16' style='vertical-align:-3px; margin-right:4px; cursor:pointer' src='data:image/png;base64," + SVTPlayFilter.IMG_CONFIG + "'>";
 
 SVTPlayFilter.Ignore = {
-    "undefined":true,
+	"undefined":true,
 	"http://cdn.playstatic.mtgx.tv/static/ui/img/clip-small-placeholder.png":true
 }
 
@@ -121,7 +122,7 @@ GM_addStyle("#playconfig select { font-size: 14px; width:800px }");
 
 SVTPlayFilter.OpenConfig = function(){
 
-    SVTPlayFilter.LoadData();
+	SVTPlayFilter.LoadData();
 	
 	var conf = "<div id='playconfig'></div>";
 	
@@ -132,30 +133,30 @@ SVTPlayFilter.OpenConfig = function(){
 	var rearrange = $("<input type='checkbox' " + ( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].DisableRearrange ? "checked='checked'" : "") + ">").appendTo(w);
 	$("<span> Disable rearranging of items after hiding</span>").appendTo(w);
 
-    var hidepremium = $("<br><input type='checkbox' " + ( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium ? "checked='checked'" : "") + ">").appendTo(w);
-    $("<span> Hide premium/subscription videos</span>").appendTo(w);
+	var hidepremium = $("<br><input type='checkbox' " + ( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium ? "checked='checked'" : "") + ">").appendTo(w);
+	$("<span> Hide premium/subscription videos</span>").appendTo(w);
 
-    // video list
-    var videolist = $("<br><br>Video list<br><select multiple size=8></select>").appendTo(w);
-    var videolist_remove = $("<br><button>Remove</button>").appendTo(w).click(function(){
-        $('option:selected', videolist).each(function(){
-            delete SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide[ $(this).val() ];
-            $(this).remove();
-        });
-    });
+	// video list
+	var videolist = $("<br><br>Video list<br><select multiple size=8></select>").appendTo(w);
+	var videolist_remove = $("<br><button>Remove</button>").appendTo(w).click(function(){
+		$('option:selected', videolist).each(function(){
+			delete SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide[ $(this).val() ];
+			$(this).remove();
+		});
+	});
 
-    $.each(SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide, function(key, value) {
-        if(SVTPlayFilter.Ignore[key]) return;
-        var short = key.substring(key.length-90,key.length);
-        videolist.append($("<option></option>").attr("value",key).text(short)); 
-    });
+	$.each(SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide, function(key, value) {
+		if(SVTPlayFilter.Ignore[key]) return;
+		var short = key.substring(key.length-90,key.length);
+		videolist.append($("<option></option>").attr("value",key).text(short)); 
+	});
 	
 	$("<br><br><button>Save</button>").appendTo(w).click(function(){
 		SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].DisableRearrange = rearrange.is(":checked");
-        SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium = hidepremium.is(":checked");
+		SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium = hidepremium.is(":checked");
 		SVTPlayFilter.SaveData();
-        SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Update();
-        w.remove();
+		SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Update();
+		w.remove();
 	});
 	
 	$(" <button>Close</button>").appendTo(w).click(function(){
@@ -179,11 +180,12 @@ SVTPlayFilter.Trigger["svtplay"] = {
 
 	Func: function(video){
 
-		var link = video.find("img.play_videolist-element__thumbnail-image, img.play_js-video-list-thumbnail, img.play_responsive-image").attr("data-imagename");
-		if(!link) link = video.find("img.play_videolist-element__thumbnail-image, img.play_js-video-list-thumbnail, img.play_responsive-image").attr("src");
+		var ident = video.find(".play_videolist-element__title-text, .play_videolist-element__title").text();
+
+		if(!ident) return;
 		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
 		
-		if(SVTPlayFilter.InFilter(link)){
+		if(SVTPlayFilter.InFilter(ident)){
 			video.remove();
 			if(video.is(':last-child')) _this.Rearrange();
 			return;
@@ -192,11 +194,11 @@ SVTPlayFilter.Trigger["svtplay"] = {
 		}
 		
 		if(video.find("img.hidebutton").length==0){
-			var text = video.find("span.play_videolist-element__title-text");
+			var text = video.find(".play_videolist-element__title-text, .play_videolist-element__title");
 			var button = $(CrossHtml).prependTo(text);
 			button.click(function(e){
 				SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
-				SVTPlayFilter.AddFilter(link);
+				SVTPlayFilter.AddFilter(ident);
 				SVTPlayFilter.SaveData();
 				_this.Update();
 				$("div.play_info-popoutbox").remove();
@@ -211,7 +213,7 @@ SVTPlayFilter.Trigger["svtplay"] = {
 		if( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].DisableRearrange ) return false;
 		$("div.play_js-videolist__item-container article").each(function(){
 			$(this).removeClass (function (index, css) {
-			    return (css.match (/(^|\s)play_nth-\S+/g) || []).join(' ');
+				return (css.match (/(^|\s)play_nth-\S+/g) || []).join(' ');
 			});
 			$(this).addClass("play_nth-" + ( Math.floor( ( $(this).index() ) % 12 ) + 1 ) );
 		});
@@ -265,7 +267,7 @@ SVTPlayFilter.Trigger["oppetarkiv"] = {
 	Rearrange: function(){
 		$("div.svtGridBlock article").each(function(i){
 			$(this).removeClass (function (index, css) {
-			    return (css.match (/(^|\s)svtNth-\S+/g) || []).join(' ');
+				return (css.match (/(^|\s)svtNth-\S+/g) || []).join(' ');
 			});
 			$(this).addClass("svtNth-" + ( Math.floor( ( $(this).index() ) % 12 ) + 1 ) );
 		});
@@ -319,62 +321,126 @@ SVTPlayFilter.Trigger["mtg"] = {
 
 SVTPlayFilter.Trigger["dplay"] = {
 
-    Element: "div.catalogue-item",
+	Element: "div.catalogue-item, a.listing-item",
 
-    Config: function(){
-        $(SVTPlayFilter.ConfigButton).appendTo("#menu-main-menu").click( SVTPlayFilter.OpenConfig );
-    },
+	Config: function(){
+		$(SVTPlayFilter.ConfigButton).appendTo("#menu-main-menu").click( SVTPlayFilter.OpenConfig );
+	},
 
-    Update: function(){
-        var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
-        $( _this.Element ).each( function(){ _this.Func( $(this) ); } );
-    },
+	Update: function(){
+		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
+		$( _this.Element ).each( function(){ _this.Func( $(this) ); } );
+	},
 
-    Func: function(video){
-        
-        var link = video.find("span.topLine").text();
-        //var link = raw.match(/([A-Za-z0-9\/_\-.]+)/)[0];
-        var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
+	Func: function(video){
+		
+		var link = video.find("span.topLine, div.listing-item-title").text();
+		//var link = raw.match(/([A-Za-z0-9\/_\-.]+)/)[0];
+		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
 
-        if(!link) return;
+		if(!link) return;
 
-        if( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium && video.find("div.label-premium").length > 0 ){
-            video.remove();
-            return;
-        }
-        
-        if(SVTPlayFilter.InFilter(link)){
-            video.remove();
-            if(video.is(':last-child')) _this.Rearrange();
-            return;
-        }else{
-            if(video.is(':last-child')) _this.Rearrange();
-        }
-            
-        if(video.find("img.hidebutton").length==0){
-            var text = video.find("a.catalogue-item-title");
-            var button = $(CrossHtml).appendTo(text);
-            button.click(function(e){
-                SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
-                SVTPlayFilter.AddFilter(link);
-                SVTPlayFilter.SaveData();
-                _this.Update();
-                e.preventDefault();
-                return false;
-            });
-        }
-    },
+		if( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium && video.find("div.label-premium").length > 0 ){
+			video.remove();
+			return;
+		}
+		
+		if(SVTPlayFilter.InFilter(link)){
+			video.remove();
+			if(video.is(':last-child')) _this.Rearrange();
+			return;
+		}else{
+			if(video.is(':last-child')) _this.Rearrange();
+		}
+			
+		if(video.find("img.hidebutton").length==0){
+			var cat_title = video.find("a.catalogue-item-title");
+			var list_title = video.find("div.listing-item-title");
+			if(cat_title && cat_title.length > 0){
+				var button = $(CrossHtml).appendTo(cat_title);
+				button.click(function(e){
+					SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
+					SVTPlayFilter.AddFilter(link);
+					SVTPlayFilter.SaveData();
+					_this.Update();
+					e.preventDefault();
+					return false;
+				});
+			}else if(list_title && list_title.length > 0){
+				var button = $(CrossHtml).prependTo(list_title);
+				button.click(function(e){
+					SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
+					SVTPlayFilter.AddFilter(link);
+					SVTPlayFilter.SaveData();
+					_this.Update();
+					e.preventDefault();
+					return false;
+				});
+			}
+		}
+	},
 
-    Rearrange: function(){}
+	Rearrange: function(){}
 
 }
 
-if( $("a.svtoa_logo, div.svtGridBlock").length > 0 ) SVTPlayFilter.CurrentSite = "oppetarkiv";
-if( $("a.play_logo").length > 0 ) SVTPlayFilter.CurrentSite = "svtplay";
-if( $("img.mtg-logo").length > 0 ) SVTPlayFilter.CurrentSite = "mtg";
-if( $("div.header-dplay-logo-container").length > 0 ) SVTPlayFilter.CurrentSite = "dplay";
+SVTPlayFilter.Trigger["twitch"] = {
 
-console.log("[PlayFilter] Setting site to '" + SVTPlayFilter.CurrentSite + "'.");
+	Element: "div.js-streams",
+
+	Config: function(){
+		console.log("[PlayFilter] Add config button");
+		$(SVTPlayFilter.ConfigButton).appendTo("#small_home").click( SVTPlayFilter.OpenConfig );
+	},
+
+	Update: function(){
+		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
+		$( _this.Element ).each( function(){ _this.Func( $(this) ); } );
+	},
+
+	Func: function(video){
+		
+		var ident = video.find("a.boxart").attr("original-title");
+		//var ident = raw.match(/([A-Za-z0-9\/_\-.]+)/)[0];
+		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
+
+		if(!ident) return;
+
+		console.log("[PlayFilter] Found video with ident " + ident);
+		
+		if(SVTPlayFilter.InFilter(ident)){
+			video.remove();
+			if(video.is(':last-child')) _this.Rearrange();
+			return;
+		}else{
+			if(video.is(':last-child')) _this.Rearrange();
+		}
+			
+		if(video.find("img.hidebutton").length==0){
+			var text = video.find("a.boxart");
+			var button = $(CrossHtml).appendTo(text);
+			button.click(function(e){
+				SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
+				SVTPlayFilter.AddFilter(ident);
+				SVTPlayFilter.SaveData();
+				_this.Update();
+				e.preventDefault();
+				return false;
+			});
+		}
+	},
+
+	Rearrange: function(){}
+
+}
+
+if( document.querySelector("a.svtoa_logo, div.svtGridBlock") ) SVTPlayFilter.CurrentSite = "oppetarkiv";
+if( document.querySelector("a.play_logo") ) SVTPlayFilter.CurrentSite = "svtplay";
+if( document.querySelector("img.mtg-logo") ) SVTPlayFilter.CurrentSite = "mtg";
+if( document.querySelector("div.header-dplay-logo-container") ) SVTPlayFilter.CurrentSite = "dplay";
+if( location.href.match(/twitch\.tv\/directory/) ) SVTPlayFilter.CurrentSite = "twitch";
+
+console.log("[PlayFilter] Setting site to '" + SVTPlayFilter.CurrentSite + "' on '" + location.href + "'.");
 
 SVTPlayFilter.LoadData = function(){
 
@@ -435,13 +501,18 @@ SVTPlayFilter.SaveData = function(){
 	console.log( "[PlayFilter] Config saved", SVTPlayFilter.Data );
 }
 
-SVTPlayFilter.LoadData();
+if(SVTPlayFilter.CurrentSite != "unknown"){
+	SVTPlayFilter.LoadData();
 
-SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide["undefined"] = false;
+	SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide["undefined"] = false;
 
-var CrossHtml = "<img title='Hide show permanently' class='hidebutton' width='16' height='16' style='width:16px !important; height:16px !important; vertical-align:-3px; margin-right:4px; cursor:pointer' src='data:image/gif;base64," + SVTPlayFilter.IMG_CROSS + "'>";
+	var CrossHtml = "<img title='Hide show permanently' class='hidebutton' width='16' height='16' style='width:16px !important; height:16px !important; vertical-align:-3px; margin-right:4px; cursor:pointer' src='data:image/gif;base64," + SVTPlayFilter.IMG_CROSS + "'>";
 
-if( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite] ){
-	waitForKeyElements(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element, SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func );
-	if(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Config) SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Config();
+	if( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite] ){
+		if(!document.querySelector(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element)) console.log("[PlayFilter] No containers found with media");
+		waitForKeyElements(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element, SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func );
+		if(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Config) SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Config();
+	}
+}else{
+	console.log("[PlayFilter] Unknown site");
 }
