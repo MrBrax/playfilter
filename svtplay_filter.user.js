@@ -12,7 +12,7 @@
 // @include     https://www.twitch.tv/directory/*
 // @require		https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js
 // @updateURL 	http://files.dongers.net/userscripts/svtplay_filter.user.js
-// @version     1.45
+// @version     1.46
 // @grant       GM_getValue
 // @grant       GM_setValue
 // @grant       GM_addStyle
@@ -105,18 +105,31 @@ SVTPlayFilter.IMG_CONFIG 		= "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAACX
 SVTPlayFilter.Data = {};
 SVTPlayFilter.Trigger = {};
 SVTPlayFilter.CurrentSite = "unknown";
-
-SVTPlayFilter.ConfigButton = "<img title='Config' class='hidebutton' width='16' height='16' style='vertical-align:-3px; margin-right:4px; cursor:pointer' src='data:image/png;base64," + SVTPlayFilter.IMG_CONFIG + "'>";
-
+SVTPlayFilter.CurrentlyHidden = 0;
 SVTPlayFilter.Ignore = {
 	"undefined":true,
 	"http://cdn.playstatic.mtgx.tv/static/ui/img/clip-small-placeholder.png":true
 }
 
+// html
+SVTPlayFilter.HTMLCross = "<img title='Hide show permanently' class='playfilter-button-hide' src='data:image/gif;base64," + SVTPlayFilter.IMG_CROSS + "'>";
+SVTPlayFilter.ConfigButton = "<img title='Config' class='hidebutton' id='playfilter-button-config' src='data:image/png;base64," + SVTPlayFilter.IMG_CONFIG + "'>";
+
+var xml_parser = new DOMParser();
+SVTPlayFilter.NodeCross = xml_parser.parseFromString(SVTPlayFilter.HTMLCross, "text/xml");
+SVTPlayFilter.NodeConfig = xml_parser.parseFromString(SVTPlayFilter.ConfigButton, "text/xml");
+
+console.log( "NodeCross", SVTPlayFilter.NodeCross );
+
+GM_addStyle(".playfilter-bar { position:fixed; left:0; bottom:0; padding:5px; color#fff; background: rgba(0,0,0,.6); }");
+GM_addStyle(".playfilter-bar-config { width:16px !important; height:16px !important; vertical-align:-3px; cursor:pointer }");
+GM_addStyle(".playfilter-bar-num { width:16px !important; height:16px !important; margin-left: 5px; cursor:pointer; color:#fff; font-size:12px; }");
+GM_addStyle(".playfilter-button-hide { width:16px !important; height:16px !important; vertical-align:-3px; margin-right:4px; cursor:pointer; opacity:0.6; }");
+GM_addStyle(".playfilter-button-hide:hover { opacity:1; }");
 GM_addStyle("#playconfig { all:initial; * { all:unset; } }");
-GM_addStyle("#playconfig { font-size:18px; font-family:monospace; background:#111; color:#0f0; padding:20px; position:fixed; width:800px; margin-left:-410px; left:50%; top:50px; z-index:9999999 }");
-GM_addStyle("#playconfig h1 { font-size:24px; font-weight:bold; font-family:monospace }");
-GM_addStyle("#playconfig input, #playconfig button, #playconfig select { font-size:14px; font-family:monospace; padding:2px 6px; border:1px solid #0f0; background:#000; border-radius:0; margin:2px; color:#0f0; }");
+GM_addStyle("#playconfig { font-size:18px; font: 14px Arial; background:#111; color:#dfd; padding:20px; position:fixed; width:800px; margin-left:-410px; left:50%; top:50px; z-index:9999999 }");
+GM_addStyle("#playconfig h1 { font-size:24px; font-weight:bold; }");
+GM_addStyle("#playconfig input, #playconfig button, #playconfig select { font-size:14px; font-family:Arial; padding:2px 6px; border:1px solid #888; background:#000; border-radius:0; margin:2px; color:#eee; }");
 GM_addStyle("#playconfig select { font-size: 14px; width:800px }");
 //GM_addStyle("#playconfig button { font-size:14px; font-family:monospace; padding:2px 6px; border:1px solid #0f0; background:#000; border-radius:0; margin:2px; color:#0f0; }");
 
@@ -128,7 +141,7 @@ SVTPlayFilter.OpenConfig = function(){
 	
 	var w = $(conf).appendTo("body");
 	
-	$("<h1>PlayFilter Config (" + SVTPlayFilter.CurrentSite + ")</h1>").appendTo(w);
+	$("<h1>PlayFilter v" + GM_info.script.version + " config (" + SVTPlayFilter.CurrentSite + ")</h1>").appendTo(w);
 	
 	var rearrange = $("<input type='checkbox' " + ( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].DisableRearrange ? "checked='checked'" : "") + ">").appendTo(w);
 	$("<span> Disable rearranging of items after hiding</span>").appendTo(w);
@@ -137,7 +150,7 @@ SVTPlayFilter.OpenConfig = function(){
 	$("<span> Hide premium/subscription videos</span>").appendTo(w);
 
 	// video list
-	var videolist = $("<br><br>Video list<br><select multiple size=8></select>").appendTo(w);
+	var videolist = $("<br><br>Video list<br><select multiple size=12></select>").appendTo(w);
 	var videolist_remove = $("<br><button>Remove</button>").appendTo(w).click(function(){
 		$('option:selected', videolist).each(function(){
 			delete SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide[ $(this).val() ];
@@ -145,11 +158,28 @@ SVTPlayFilter.OpenConfig = function(){
 		});
 	});
 
-	$.each(SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide, function(key, value) {
-		if(SVTPlayFilter.Ignore[key]) return;
-		var short = key.substring(key.length-90,key.length);
-		videolist.append($("<option></option>").attr("value",key).text(short)); 
-	});
+	//for(var ident in SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide){
+	//	if( ident != SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide[ ident.trim() ]){
+	//		SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide[ ident.trim() ] = true;
+	//		delete SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide[ ident ];
+	//	}
+	//}
+
+	var sortable = [];
+	for(var ident in SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide){
+		sortable.push( ident.trim() );
+	}
+
+	sortable.sort();
+
+	for(var i = 0; i < sortable.length; i++){
+	//$.each(SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide, function(key, value) {
+		var key = sortable[i];
+		if(SVTPlayFilter.Ignore[key]) continue;
+		//var short = key.substring(key.length-90,key.length);
+		videolist.append($("<option></option>").attr("value",key).text(key + " (" + key.length + ")")); 
+	//});
+	}
 	
 	$("<br><br><button>Save</button>").appendTo(w).click(function(){
 		SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].DisableRearrange = rearrange.is(":checked");
@@ -165,58 +195,91 @@ SVTPlayFilter.OpenConfig = function(){
 	
 }
 
+// helper funcs
+var matches = function(el, selector) {
+  return (el.matches || el.matchesSelector || el.msMatchesSelector || el.mozMatchesSelector || el.webkitMatchesSelector || el.oMatchesSelector).call(el, selector);
+};
+
 SVTPlayFilter.Trigger["svtplay"] = {
 
 	Element: "article.play_videolist-element",
-	
-	Config: function(){
-		$(SVTPlayFilter.ConfigButton).appendTo("ul.play_navigation__list").click( SVTPlayFilter.OpenConfig );
-	},
+
+	CheckType: "article",
+	CheckClass: "play_videolist-element",
 
 	Update: function(){
-		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
-		$( _this.Element ).each( function(){ _this.Func( $(this) ); } );
+		var _this = SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ];
+		var qs = document.querySelectorAll( _this.Element );
+		if(qs){
+			for( i in qs ){
+				_this.Func( qs[i] );
+			}
+		}
 	},
 
 	Func: function(video){
 
-		var ident = video.find(".play_videolist-element__title-text, .play_videolist-element__title").text();
+		if(!video.querySelector){
+			console.log("No querySelector for: ", video);
+			return;
+		}
 
-		if(!ident) return;
+		var ident = video.querySelector(".play_videolist-element__title-text, .play_videolist-element__title")
+		var ident_text = ident ? ident.textContent.trim() : false;
+
+		//console.info("[PlayFilter] Got video node ", ident_text);
+
+		if(!ident_text){ console.error("Couldn't find video info: ", ident, ident_text); return; }
 		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
 		
-		if(SVTPlayFilter.InFilter(ident)){
-			video.remove();
-			if(video.is(':last-child')) _this.Rearrange();
+		if(SVTPlayFilter.InFilter(ident_text)){
+			console.info("[PlayFilter] Hide video ", ident_text);
+			SVTPlayFilter.CurrentlyHidden++;
+			SVTPlayFilter.StatusUpdate();
+			video.parentNode.removeChild(video);
+			if( matches(video, ':last-child') ) _this.Rearrange();
 			return;
 		}else{
-			if(video.is(':last-child')) _this.Rearrange();
+			if( matches(video, ':last-child') ) _this.Rearrange();
 		}
 		
-		if(video.find("img.hidebutton").length==0){
-			var text = video.find(".play_videolist-element__title-text, .play_videolist-element__title");
-			var button = $(CrossHtml).prependTo(text);
-			button.click(function(e){
+		if(!video.querySelector("img.playfilter-button-hide")){
+			var text = video.querySelectorAll(".play_videolist-element__title-text, .play_videolist-element__title");
+			if(!text){
+				console.error("[PlayFilter] Could not find place for button: ", ident_text);
+				return;
+			}
+			text = text[0];
+			//console.log( "[PlayFilter] Found title node: ", text );
+			var button = document.createElement("img");
+			button.src = "data:image/png;base64," + SVTPlayFilter.IMG_CROSS; // text[0].insertAdjacentHTML("afterbegin", SVTPlayFilter.HTMLCross); //$(SVTPlayFilter.HTMLCross).prependTo(text);
+			button.className = "playfilter-button-hide";
+			button.title = "Hide show permanently";
+			button.onclick = function(e){
 				SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
-				SVTPlayFilter.AddFilter(ident);
+				SVTPlayFilter.AddFilter(ident_text);
 				SVTPlayFilter.SaveData();
 				_this.Update();
 				$("div.play_info-popoutbox").remove();
 				e.preventDefault();
 				return false;
-			});
+			}
+			text.insertBefore(button, text.firstChild);
+			//console.info("[PlayFilter] Add hide button: ", ident_text);
 		}
 
 	},
 
 	Rearrange: function(){
 		if( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].DisableRearrange ) return false;
-		$("div.play_js-videolist__item-container article").each(function(){
-			$(this).removeClass (function (index, css) {
-				return (css.match (/(^|\s)play_nth-\S+/g) || []).join(' ');
-			});
-			$(this).addClass("play_nth-" + ( Math.floor( ( $(this).index() ) % 12 ) + 1 ) );
-		});
+		var videos = document.querySelectorAll("div.play_js-videolist__item-container article");
+		for( i in videos){
+			videos[i].className = videos[i].className.replace(/play_nth\-[0-9]+/, "play_nth-" + ( Math.floor( ( $(this).index() ) % 12 ) + 1 ) );
+			//$(this).removeClass (function (index, css) {
+			//	return (css.match (/(^|\s)play_nth-\S+/g) || []).join(' ');
+			//});
+			//$(this).addClass("play_nth-" + ( Math.floor( ( $(this).index() ) % 12 ) + 1 ) );
+		}
 	}
 
 }
@@ -252,7 +315,7 @@ SVTPlayFilter.Trigger["oppetarkiv"] = {
 			
 		if(video.find("img.hidebutton").length==0){
 			var text = video.find("h1.svt-heading-xs");
-			var button = $(CrossHtml).prependTo(text);
+			var button = $(SVTPlayFilter.HTMLCross).prependTo(text);
 			button.click(function(e){
 				SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
 				SVTPlayFilter.AddFilter(link);
@@ -302,7 +365,7 @@ SVTPlayFilter.Trigger["mtg"] = {
 			
 		if(video.find("img.hidebutton").length==0){
 			var text = video.find("div.clip-additional-info");
-			var button = $(CrossHtml).prependTo(text);
+			var button = $(SVTPlayFilter.HTMLCross).prependTo(text);
 			button.click(function(e){
 				SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
 				SVTPlayFilter.AddFilter(link);
@@ -357,7 +420,7 @@ SVTPlayFilter.Trigger["dplay"] = {
 			var cat_title = video.find("a.catalogue-item-title");
 			var list_title = video.find("div.listing-item-title");
 			if(cat_title && cat_title.length > 0){
-				var button = $(CrossHtml).appendTo(cat_title);
+				var button = $(SVTPlayFilter.HTMLCross).appendTo(cat_title);
 				button.click(function(e){
 					SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
 					SVTPlayFilter.AddFilter(link);
@@ -367,7 +430,7 @@ SVTPlayFilter.Trigger["dplay"] = {
 					return false;
 				});
 			}else if(list_title && list_title.length > 0){
-				var button = $(CrossHtml).prependTo(list_title);
+				var button = $(SVTPlayFilter.HTMLCross).prependTo(list_title);
 				button.click(function(e){
 					SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
 					SVTPlayFilter.AddFilter(link);
@@ -418,7 +481,7 @@ SVTPlayFilter.Trigger["twitch"] = {
 			
 		if(video.find("img.hidebutton").length==0){
 			var text = video.find("a.boxart");
-			var button = $(CrossHtml).appendTo(text);
+			var button = $(SVTPlayFilter.HTMLCross).appendTo(text);
 			button.click(function(e){
 				SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
 				SVTPlayFilter.AddFilter(ident);
@@ -483,8 +546,8 @@ SVTPlayFilter.LoadData = function(){
 }
 
 SVTPlayFilter.InFilter = function(img){
-	if(SVTPlayFilter.Ignore[img]) return false;
-	return SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide[img];
+	if(SVTPlayFilter.Ignore[ img ]) return false;
+	return SVTPlayFilter.Data[ SVTPlayFilter.CurrentSite ].Hide[ img ];
 }
 
 SVTPlayFilter.AddFilter = function(img){
@@ -501,17 +564,89 @@ SVTPlayFilter.SaveData = function(){
 	console.log( "[PlayFilter] Config saved", SVTPlayFilter.Data );
 }
 
+SVTPlayFilter.StatusUpdate = function(){
+	var num = document.getElementById("playfilter-bar-num");
+	if(num){ num.innerHTML = SVTPlayFilter.CurrentlyHidden; }else{ console.error("no num found"); }
+}
+
 if(SVTPlayFilter.CurrentSite != "unknown"){
 	SVTPlayFilter.LoadData();
 
 	SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide["undefined"] = false;
 
-	var CrossHtml = "<img title='Hide show permanently' class='hidebutton' width='16' height='16' style='width:16px !important; height:16px !important; vertical-align:-3px; margin-right:4px; cursor:pointer' src='data:image/gif;base64," + SVTPlayFilter.IMG_CROSS + "'>";
-
 	if( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite] ){
-		if(!document.querySelector(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element)) console.log("[PlayFilter] No containers found with media");
-		waitForKeyElements(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element, SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func );
-		if(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Config) SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Config();
+
+		function mutationHandler (mutationRecords) {
+
+			mutationRecords.forEach ( function (mutation) {
+
+				if (    mutation.type               == "childList"
+					&&  typeof mutation.addedNodes  == "object"
+					&&  mutation.addedNodes.length
+				) {
+					for (var J = 0, L = mutation.addedNodes.length;  J < L;  ++J) {
+						checkForCSS_Class (mutation.addedNodes[J], "nav");
+					}
+				}
+				else if (mutation.type == "attributes") {
+					checkForCSS_Class (mutation.target, SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].CheckClass );
+				}
+			} );
+		}
+
+		function checkForCSS_Class (node, className) {
+			//-- Only process element nodes
+			if (node.nodeType === 1) {
+				if (node.classList.contains (className) ) {
+					//console.log ('New node with class "' + className + '" = ', node);
+					SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func(node);
+				}
+			}
+		}
+
+		var MutationObserver = window.MutationObserver;
+		var myObserver       = new MutationObserver (mutationHandler);
+		var obsConfig        = {
+			childList: true, attributes: true,
+			subtree: true,   attributeFilter: ['class']
+		};
+
+		myObserver.observe (document, obsConfig);
+
+		//waitForKeyElements(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element, SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func );
+		//if(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Config) SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Config();
+		console.info("[PlayFilter] Add config button");
+
+		var place = document.createElement("div");
+		place.className = "playfilter-bar";
+
+		var button = document.createElement("img");
+		button.className = "playfilter-bar-config";
+		button.src = "data:image/png;base64," + SVTPlayFilter.IMG_CONFIG;
+		button.addEventListener("click", SVTPlayFilter.OpenConfig );
+		button.title = "Open config";
+
+		var num = document.createElement("span");
+		num.className = "playfilter-bar-num";
+		num.id = "playfilter-bar-num";
+		num.innerHTML = "0";
+		num.title = "Number of items hidden";
+
+		place.appendChild(button);
+		place.appendChild(num);
+
+		document.body.appendChild(place);
+
+		var init_videos = document.querySelectorAll(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element);
+		if(init_videos){
+			console.log("[PlayFilter] Hide initial media");
+			for( i in init_videos ){
+				SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( init_videos[i] );
+			}
+		}else{
+			console.log("[PlayFilter] No containers found with media");
+		}
+
 	}
 }else{
 	console.log("[PlayFilter] Unknown site");
