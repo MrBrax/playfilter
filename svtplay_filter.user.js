@@ -106,6 +106,7 @@ SVTPlayFilter.Data = {};
 SVTPlayFilter.Trigger = {};
 SVTPlayFilter.CurrentSite = "unknown";
 SVTPlayFilter.CurrentlyHidden = 0;
+SVTPlayFilter.IndexedNodes = {};
 SVTPlayFilter.Ignore = {
 	"undefined":true,
 	"http://cdn.playstatic.mtgx.tv/static/ui/img/clip-small-placeholder.png":true
@@ -220,7 +221,7 @@ SVTPlayFilter.Trigger["svtplay"] = {
 	Func: function(video){
 
 		if(!video.querySelector){
-			console.log("No querySelector for: ", video);
+			console.log("No querySelector for: ", typeof video, video);
 			return;
 		}
 
@@ -386,59 +387,74 @@ SVTPlayFilter.Trigger["dplay"] = {
 
 	Element: "div.catalogue-item, a.listing-item",
 
-	Config: function(){
-		$(SVTPlayFilter.ConfigButton).appendTo("#menu-main-menu").click( SVTPlayFilter.OpenConfig );
-	},
+	CheckClass: ["catalogue-item", "listing-item"],
 
 	Update: function(){
-		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
-		$( _this.Element ).each( function(){ _this.Func( $(this) ); } );
+		var _this = SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ];
+		var qs = document.querySelectorAll( _this.Element );
+		if(qs){
+			for( i in qs ){
+				_this.Func( qs[i] );
+			}
+		}
 	},
 
 	Func: function(video){
+
+		if( SVTPlayFilter.IndexedNodes[video] ){ console.log("node already exists", typeof video ); return; }
 		
-		var link = video.find("span.topLine, div.listing-item-title").text();
-		//var link = raw.match(/([A-Za-z0-9\/_\-.]+)/)[0];
+		if(!video.querySelector){
+			console.log("No querySelector for: ", video, typeof video, arguments.callee);
+			return;
+		}
+
+		var ident = video.querySelector("span.topLine, div.listing-item-title");
+		var ident_text = ident ? ident.textContent.trim() : false;
+
+		if(!ident_text){ console.error("Couldn't find video info: ", ident, ident_text); return; }
 		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
 
-		if(!link) return;
+		console.info("[PlayFilter] Got video node ", ident_text);
 
-		if( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium && video.find("div.label-premium").length > 0 ){
-			video.remove();
+		if( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium && video.querySelector("div.label-premium") ){
+			console.info("[PlayFilter] Hide premium video ", ident_text);
+			video.parentNode.removeChild(video);
 			return;
 		}
 		
-		if(SVTPlayFilter.InFilter(link)){
-			video.remove();
-			if(video.is(':last-child')) _this.Rearrange();
+		if(SVTPlayFilter.InFilter(ident_text)){
+			console.info("[PlayFilter] Hide video ", ident_text);
+			video.parentNode.removeChild(video);
+			if( matches(video, ':last-child') ) _this.Rearrange();
 			return;
 		}else{
-			if(video.is(':last-child')) _this.Rearrange();
+			if( matches(video, ':last-child') ) _this.Rearrange();
 		}
 			
-		if(video.find("img.hidebutton").length==0){
-			var cat_title = video.find("a.catalogue-item-title");
-			var list_title = video.find("div.listing-item-title");
-			if(cat_title && cat_title.length > 0){
-				var button = $(SVTPlayFilter.HTMLCross).appendTo(cat_title);
-				button.click(function(e){
-					SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
-					SVTPlayFilter.AddFilter(link);
-					SVTPlayFilter.SaveData();
-					_this.Update();
-					e.preventDefault();
-					return false;
-				});
-			}else if(list_title && list_title.length > 0){
-				var button = $(SVTPlayFilter.HTMLCross).prependTo(list_title);
-				button.click(function(e){
-					SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
-					SVTPlayFilter.AddFilter(link);
-					SVTPlayFilter.SaveData();
-					_this.Update();
-					e.preventDefault();
-					return false;
-				});
+		if(!video.querySelector("img.playfilter-button-hide")){
+
+			SVTPlayFilter.IndexedNodes[video] = true;
+
+			var cat_title = video.querySelectorAll("a.catalogue-item-title");
+			var list_title = video.querySelectorAll("div.listing-item-title");
+
+			var button = document.createElement("img");
+			button.src = "data:image/png;base64," + SVTPlayFilter.IMG_CROSS;
+			button.className = "playfilter-button-hide";
+			button.title = "Hide show permanently";
+			button.onclick = function(e){
+				SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
+				SVTPlayFilter.AddFilter(ident_text);
+				SVTPlayFilter.SaveData();
+				_this.Update();
+				e.preventDefault();
+				return false;
+			}
+
+			if( cat_title && cat_title[0] ){
+				cat_title[0].insertBefore(button, cat_title[0].firstChild);
+			}else if( list_title && list_title[0] ){
+				list_title[0].insertBefore(button, list_title[0].firstChild);
 			}
 		}
 	},
@@ -569,6 +585,16 @@ SVTPlayFilter.StatusUpdate = function(){
 	if(num){ num.innerHTML = SVTPlayFilter.CurrentlyHidden; }else{ console.error("no num found"); }
 }
 
+SVTPlayFilter.UpdateItems = function(){
+	var vids = document.querySelectorAll( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element );
+	if(vids){
+		for(var i in vids ){
+			SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ].Func( vids[i] );
+		}
+	}
+	return vids;
+}
+
 if(SVTPlayFilter.CurrentSite != "unknown"){
 	SVTPlayFilter.LoadData();
 
@@ -576,38 +602,66 @@ if(SVTPlayFilter.CurrentSite != "unknown"){
 
 	if( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite] ){
 
+		var cClass = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].CheckClass;
+
 		function mutationHandler (mutationRecords) {
 
 			mutationRecords.forEach ( function (mutation) {
 
-				if (    mutation.type               == "childList"
-					&&  typeof mutation.addedNodes  == "object"
-					&&  mutation.addedNodes.length
-				) {
+				if ( mutation.type == "childList" && typeof mutation.addedNodes == "object" && mutation.addedNodes.length ) {
 					for (var J = 0, L = mutation.addedNodes.length;  J < L;  ++J) {
-						checkForCSS_Class (mutation.addedNodes[J], "nav");
+						//console.log("multi level", mutation.addedNodes);
+						//var vids = mutation.addedNodes[J].querySelectorAll( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element );
+						//if(vids){
+						//	for(var i in vids ){
+						//		console.log("Mutation child func ", i, vids[i]);
+						//		SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( vids[i] );
+						//	}
+						//}else{
+						//	console.log("No mutation children");
+						//}
+						//console.log("!! Mutation child loop ", mutation.addedNodes[J].tagName, mutation.addedNodes[J].className );
+						//checkForCSS_Class(mutation.addedNodes[J], cClass);
+						SVTPlayFilter.UpdateItems();
 					}
+
+				}else if (mutation.type == "attributes") {
+					SVTPlayFilter.UpdateItems();
+					//console.log("!! Mutation attribute func ", mutation.target);
+					//checkForCSS_Class(mutation.target, cClass );
 				}
-				else if (mutation.type == "attributes") {
-					checkForCSS_Class (mutation.target, SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].CheckClass );
-				}
-			} );
+			});
 		}
 
 		function checkForCSS_Class (node, className) {
 			//-- Only process element nodes
+			console.log("check css", node.nodeType, node.className );
 			if (node.nodeType === 1) {
-				if (node.classList.contains (className) ) {
-					//console.log ('New node with class "' + className + '" = ', node);
-					SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func(node);
-				}
+				/*
+				if(typeof className == "string"){
+					if (node.classList.contains(className) ) {
+						console.log("!! Mutation css func: ", node, node.className );
+						SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func(node);
+					}
+				}else{
+					for(var i in className){
+						if (node.classList.contains(className[i]) ) {
+							console.log("!! Mutation css func ", i, node, node.className );
+							SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func(node);
+							break;
+						}
+					}
+				}*/
+
+			}else{
+				console.log("wrong nodetype");
 			}
 		}
 
 		var MutationObserver = window.MutationObserver;
 		var myObserver       = new MutationObserver (mutationHandler);
 		var obsConfig        = {
-			childList: true, attributes: true,
+			childList: true, attributes: true, characterData: true,
 			subtree: true,   attributeFilter: ['class']
 		};
 
@@ -626,6 +680,21 @@ if(SVTPlayFilter.CurrentSite != "unknown"){
 		button.addEventListener("click", SVTPlayFilter.OpenConfig );
 		button.title = "Open config";
 
+		var refresh = document.createElement("img");
+		refresh.className = "playfilter-bar-config";
+		refresh.src = "data:image/png;base64," + SVTPlayFilter.IMG_CONFIG;
+		refresh.addEventListener("click", function(){
+			var refr_videos = document.querySelectorAll(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element);
+			if(refr_videos){
+				console.log("[PlayFilter] Refresh media (" + refr_videos.length + ")");
+				for( i in refr_videos ){
+					SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( refr_videos[i] );
+				}
+			}
+		});
+		refresh.title = "Refresh";
+
+
 		var num = document.createElement("span");
 		num.className = "playfilter-bar-num";
 		num.id = "playfilter-bar-num";
@@ -633,13 +702,14 @@ if(SVTPlayFilter.CurrentSite != "unknown"){
 		num.title = "Number of items hidden";
 
 		place.appendChild(button);
+		place.appendChild(refresh);
 		place.appendChild(num);
 
 		document.body.appendChild(place);
 
 		var init_videos = document.querySelectorAll(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element);
 		if(init_videos){
-			console.log("[PlayFilter] Hide initial media");
+			console.log("[PlayFilter] Hide initial media (" + init_videos.length + ")");
 			for( i in init_videos ){
 				SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( init_videos[i] );
 			}
