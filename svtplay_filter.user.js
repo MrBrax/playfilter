@@ -12,7 +12,7 @@
 // @include     https://www.twitch.tv/directory/*
 // @require		https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js
 // @updateURL 	http://files.dongers.net/userscripts/svtplay_filter.user.js
-// @version     1.46
+// @version     1.47
 // @grant       GM_getValue
 // @grant       GM_setValue
 // @grant       GM_addStyle
@@ -122,9 +122,10 @@ SVTPlayFilter.NodeConfig = xml_parser.parseFromString(SVTPlayFilter.ConfigButton
 
 console.log( "NodeCross", SVTPlayFilter.NodeCross );
 
-GM_addStyle(".playfilter-bar { position:fixed; left:0; bottom:0; padding:5px; color#fff; background: rgba(0,0,0,.6); }");
+GM_addStyle(".playfilter-bar { position:fixed; right:0; bottom:0; padding:5px; color:#fff; background: rgba(0,0,0,.6); }");
 GM_addStyle(".playfilter-bar-config { width:16px !important; height:16px !important; vertical-align:-3px; cursor:pointer }");
-GM_addStyle(".playfilter-bar-num { width:16px !important; height:16px !important; margin-left: 5px; cursor:pointer; color:#fff; font-size:12px; }");
+GM_addStyle(".playfilter-bar-num { margin-left: 5px; cursor:pointer; color:#fff; font-size:12px; }");
+GM_addStyle(".playfilter-bar-obs { margin-left: 5px; cursor:pointer; color:#fff; font-size:12px; }");
 GM_addStyle(".playfilter-button-hide { width:16px !important; height:16px !important; vertical-align:-3px; margin-right:4px; cursor:pointer; opacity:0.6; }");
 GM_addStyle(".playfilter-button-hide:hover { opacity:1; }");
 GM_addStyle("#playconfig { all:initial; * { all:unset; } }");
@@ -207,23 +208,28 @@ SVTPlayFilter.Trigger["svtplay"] = {
 
 	CheckType: "article",
 	CheckClass: "play_videolist-element",
+	CheckContainer: "div.play_content-grid",
 
 	Update: function(){
-		var _this = SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ];
-		var qs = document.querySelectorAll( _this.Element );
-		if(qs){
-			for( i in qs ){
-				_this.Func( qs[i] );
-			}
-		}
+		//var _this = SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ];
+		//var qs = document.querySelectorAll( _this.Element );
+		//if(qs){
+		//	for( i in qs ){
+		//		_this.Func( qs[i] );
+		//	}
+		//}
 	},
 
 	Func: function(video){
+
+		if(typeof video != "object") return;
 
 		if(!video.querySelector){
 			console.log("No querySelector for: ", typeof video, video);
 			return;
 		}
+
+		//video.PFix = true;
 
 		var ident = video.querySelector(".play_videolist-element__title-text, .play_videolist-element__title")
 		var ident_text = ident ? ident.textContent.trim() : false;
@@ -234,15 +240,16 @@ SVTPlayFilter.Trigger["svtplay"] = {
 		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
 		
 		if(SVTPlayFilter.InFilter(ident_text)){
-			console.info("[PlayFilter] Hide video ", ident_text);
+			//console.info("[PlayFilter] Hide video ", ident_text);
+			//video.PFix = true;
 			SVTPlayFilter.CurrentlyHidden++;
 			SVTPlayFilter.StatusUpdate();
 			video.parentNode.removeChild(video);
-			if( matches(video, ':last-child') ) _this.Rearrange();
+			SVTPlayFilter.InvalidLayout = true;
 			return;
-		}else{
-			if( matches(video, ':last-child') ) _this.Rearrange();
 		}
+
+		if(video.PFix) return;
 		
 		if(!video.querySelector("img.playfilter-button-hide")){
 			var text = video.querySelectorAll(".play_videolist-element__title-text, .play_videolist-element__title");
@@ -253,16 +260,22 @@ SVTPlayFilter.Trigger["svtplay"] = {
 			text = text[0];
 			//console.log( "[PlayFilter] Found title node: ", text );
 			var button = document.createElement("img");
-			button.src = "data:image/png;base64," + SVTPlayFilter.IMG_CROSS; // text[0].insertAdjacentHTML("afterbegin", SVTPlayFilter.HTMLCross); //$(SVTPlayFilter.HTMLCross).prependTo(text);
+			button.src = "data:image/png;base64," + SVTPlayFilter.IMG_CROSS;
 			button.className = "playfilter-button-hide";
 			button.title = "Hide show permanently";
 			button.onclick = function(e){
+				e.preventDefault();
+				e.stopPropagation();
 				SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
 				SVTPlayFilter.AddFilter(ident_text);
 				SVTPlayFilter.SaveData();
-				_this.Update();
-				$("div.play_info-popoutbox").remove();
-				e.preventDefault();
+				SVTPlayFilter.UpdateItems(null, video.parentNode);
+
+				var popout = document.querySelector("div.play_info-popoutbox")
+				if(popout){
+					popout.parentNode.removeChild(popout);
+				}
+				//$("div.play_info-popoutbox").remove();	
 				return false;
 			}
 			text.insertBefore(button, text.firstChild);
@@ -271,16 +284,31 @@ SVTPlayFilter.Trigger["svtplay"] = {
 
 	},
 
-	Rearrange: function(){
+	Rearrange: function( block ){
 		if( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].DisableRearrange ) return false;
-		var videos = document.querySelectorAll("div.play_js-videolist__item-container article");
+		console.log("Rearrange all items");
+		SVTPlayFilter.SetObserver(false);
+		var videos;
+		if(block){
+			videos = block.querySelectorAll("article");
+		}else{
+			videos = document.querySelectorAll("div.play_js-videolist__item-container article");
+		}
+		var n = 0;
+		var p;
 		for( i in videos){
-			videos[i].className = videos[i].className.replace(/play_nth\-[0-9]+/, "play_nth-" + ( Math.floor( ( $(this).index() ) % 12 ) + 1 ) );
+			if(!videos[i].className) continue;
+			if(p != videos[i].parentNode){ p = videos[i].parentNode; n = 0; }
+			//console.log("arrange", videos[i].className, n); 
+			videos[i].className = videos[i].className.replace(/play_nth\-[0-9]+/, "play_nth-" + ( Math.floor( n % 12 ) + 1 ) );
 			//$(this).removeClass (function (index, css) {
 			//	return (css.match (/(^|\s)play_nth-\S+/g) || []).join(' ');
 			//});
 			//$(this).addClass("play_nth-" + ( Math.floor( ( $(this).index() ) % 12 ) + 1 ) );
+			n++;
 		}
+		SVTPlayFilter.SetObserver(true);
+		SVTPlayFilter.InvalidLayout = false;
 	}
 
 }
@@ -400,8 +428,6 @@ SVTPlayFilter.Trigger["dplay"] = {
 	},
 
 	Func: function(video){
-
-		if( SVTPlayFilter.IndexedNodes[video] ){ console.log("node already exists", typeof video ); return; }
 		
 		if(!video.querySelector){
 			console.log("No querySelector for: ", video, typeof video, arguments.callee);
@@ -423,12 +449,13 @@ SVTPlayFilter.Trigger["dplay"] = {
 		}
 		
 		if(SVTPlayFilter.InFilter(ident_text)){
-			console.info("[PlayFilter] Hide video ", ident_text);
+			//console.info("[PlayFilter] Hide video ", ident_text);
+			//video.PFix = true;
+			SVTPlayFilter.CurrentlyHidden++;
+			SVTPlayFilter.StatusUpdate();
 			video.parentNode.removeChild(video);
-			if( matches(video, ':last-child') ) _this.Rearrange();
+			SVTPlayFilter.InvalidLayout = true;
 			return;
-		}else{
-			if( matches(video, ':last-child') ) _this.Rearrange();
 		}
 			
 		if(!video.querySelector("img.playfilter-button-hide")){
@@ -582,17 +609,31 @@ SVTPlayFilter.SaveData = function(){
 
 SVTPlayFilter.StatusUpdate = function(){
 	var num = document.getElementById("playfilter-bar-num");
-	if(num){ num.innerHTML = SVTPlayFilter.CurrentlyHidden; }else{ console.error("no num found"); }
+	if(num){ num.innerHTML = SVTPlayFilter.CurrentlyHidden + "/" + Object.keys(SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide).length; }else{ console.error("no num found"); }
 }
 
-SVTPlayFilter.UpdateItems = function(){
-	var vids = document.querySelectorAll( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element );
+SVTPlayFilter.SetObserver = function( state ){
+	SVTPlayFilter.Blocked = state;
+	var st = document.getElementById("playfilter-bar-obs");
+	if(st){ st.innerHTML = state ? "on" : "off"; }else{ console.error("no num found"); }
+}
+
+SVTPlayFilter.UpdateItems = function( sIdent, aBlock ){
+	//if(SVTPlayFilter.Searching){ console.log("UpdateItems - searching " + SVTPlayFilter.Searching + ";"); return; }
+	console.log("UpdateItems - turn off observer; ", sIdent);
+	SVTPlayFilter.SetObserver(false);
+	//myObserver.disconnect();
+	var vids = ( sIdent ? sIdent : document ).querySelectorAll( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element );
 	if(vids){
 		for(var i in vids ){
+			vids[i].PFix = false;
 			SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ].Func( vids[i] );
 		}
 	}
-	return vids;
+	SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ].Rearrange(aBlock);
+	//console.log("UpdateItems - turn on observer;", sIdent);
+	SVTPlayFilter.SetObserver(true);
+	//myObserver.observe(document, obsConfig);
 }
 
 if(SVTPlayFilter.CurrentSite != "unknown"){
@@ -603,58 +644,85 @@ if(SVTPlayFilter.CurrentSite != "unknown"){
 	if( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite] ){
 
 		var cClass = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].CheckClass;
-
+	
 		function mutationHandler (mutationRecords) {
 
-			mutationRecords.forEach ( function (mutation) {
+			if(SVTPlayFilter.Blocked){
 
-				if ( mutation.type == "childList" && typeof mutation.addedNodes == "object" && mutation.addedNodes.length ) {
-					for (var J = 0, L = mutation.addedNodes.length;  J < L;  ++J) {
-						//console.log("multi level", mutation.addedNodes);
-						//var vids = mutation.addedNodes[J].querySelectorAll( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element );
-						//if(vids){
-						//	for(var i in vids ){
-						//		console.log("Mutation child func ", i, vids[i]);
-						//		SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( vids[i] );
-						//	}
-						//}else{
-						//	console.log("No mutation children");
-						//}
-						//console.log("!! Mutation child loop ", mutation.addedNodes[J].tagName, mutation.addedNodes[J].className );
-						//checkForCSS_Class(mutation.addedNodes[J], cClass);
-						SVTPlayFilter.UpdateItems();
+				mutationRecords.forEach ( function (mutation) {
+
+					//SVTPlayFilter.SetObserver(false);
+
+					if ( mutation.type == "childList" && typeof mutation.addedNodes == "object" && mutation.addedNodes.length ) {
+
+						//console.log("MutationEvent child");
+						
+						for (var J = 0, L = mutation.addedNodes.length;  J < L;  ++J) {
+							//SVTPlayFilter.UpdateItems( mutation.addedNodes[J] );
+							//if(mutation.addedNodes[J].PFix) continue;
+							//mutation.addedNodes[J].PFix = true
+							//console.log("multi level", mutation.addedNodes);
+							//var vids = mutation.addedNodes[J].querySelectorAll( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element );
+							//if(vids){
+							//	for(var i in vids ){
+							//		console.log("Mutation child func ", i, vids[i]);
+							//		SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( vids[i] );
+							//	}
+							//}else{
+							//	console.log("No mutation children");
+							//}
+							//console.log("!! Mutation child loop ", mutation.addedNodes[J].className );
+							checkForCSS_Class(mutation.addedNodes[J], cClass)
+							
+						}
+
+					}else if (mutation.type == "attributes") {
+						//if(mutation.target.PFix) return;
+						//mutation.target.PFix = true
+						//console.log("!! MutationEvent attribute", mutation.target.className );
+						//SVTPlayFilter.UpdateItems( mutation.target );
+						//console.log("!! Mutation attribute func ", mutation.target);
+						//checkForCSS_Class(mutation.target, cClass );
 					}
+				});
 
-				}else if (mutation.type == "attributes") {
-					SVTPlayFilter.UpdateItems();
-					//console.log("!! Mutation attribute func ", mutation.target);
-					//checkForCSS_Class(mutation.target, cClass );
-				}
-			});
+			}else{
+				//SVTPlayFilter.SetObserver(true);
+			}
+
+			//if(SVTPlayFilter.InvalidLayout) SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Rearrange();
+			
 		}
 
 		function checkForCSS_Class (node, className) {
 			//-- Only process element nodes
-			console.log("check css", node.nodeType, node.className );
+			//console.log("check css", node.className );
 			if (node.nodeType === 1) {
-				/*
+
+				if(node.PFix) return;
+				node.PFix = true;
+				
 				if(typeof className == "string"){
 					if (node.classList.contains(className) ) {
-						console.log("!! Mutation css func: ", node, node.className );
-						SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func(node);
+						//console.log("!! Mutation css func: ", node, node.className );
+						SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( node );
+						//SVTPlayFilter.UpdateItems( node );
+						return;
 					}
 				}else{
 					for(var i in className){
 						if (node.classList.contains(className[i]) ) {
-							console.log("!! Mutation css func ", i, node, node.className );
-							SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func(node);
+							//console.log("!! Mutation css multi func ", i, node, node.className );
+							SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( node );
+							//SVTPlayFilter.UpdateItems( node );
+							return;
 							break;
 						}
 					}
-				}*/
+				}
 
 			}else{
-				console.log("wrong nodetype");
+				//console.log("wrong nodetype");
 			}
 		}
 
@@ -664,9 +732,9 @@ if(SVTPlayFilter.CurrentSite != "unknown"){
 			childList: true, attributes: true, characterData: true,
 			subtree: true,   attributeFilter: ['class']
 		};
-
-		myObserver.observe (document, obsConfig);
-
+		
+		myObserver.observe(document, obsConfig);
+		
 		//waitForKeyElements(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element, SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func );
 		//if(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Config) SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Config();
 		console.info("[PlayFilter] Add config button");
@@ -684,13 +752,14 @@ if(SVTPlayFilter.CurrentSite != "unknown"){
 		refresh.className = "playfilter-bar-config";
 		refresh.src = "data:image/png;base64," + SVTPlayFilter.IMG_CONFIG;
 		refresh.addEventListener("click", function(){
-			var refr_videos = document.querySelectorAll(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element);
-			if(refr_videos){
-				console.log("[PlayFilter] Refresh media (" + refr_videos.length + ")");
-				for( i in refr_videos ){
-					SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( refr_videos[i] );
-				}
-			}
+			SVTPlayFilter.UpdateItems();
+			//var refr_videos = document.querySelectorAll(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element);
+			//if(refr_videos){
+			//	console.log("[PlayFilter] Refresh media (" + refr_videos.length + ")");
+			//	for( i in refr_videos ){
+			//		SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( refr_videos[i] );
+			//	}
+			//}
 		});
 		refresh.title = "Refresh";
 
@@ -701,21 +770,44 @@ if(SVTPlayFilter.CurrentSite != "unknown"){
 		num.innerHTML = "0";
 		num.title = "Number of items hidden";
 
+		var obs = document.createElement("span");
+		obs.className = "playfilter-bar-obs";
+		obs.id = "playfilter-bar-obs";
+		obs.innerHTML = "0";
+		obs.title = "Observer";
+
 		place.appendChild(button);
 		place.appendChild(refresh);
 		place.appendChild(num);
+		place.appendChild(obs);
 
 		document.body.appendChild(place);
 
+		SVTPlayFilter.SetObserver(false);
 		var init_videos = document.querySelectorAll(SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element);
 		if(init_videos){
 			console.log("[PlayFilter] Hide initial media (" + init_videos.length + ")");
 			for( i in init_videos ){
+				init_videos[i].PFix = false;
 				SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( init_videos[i] );
 			}
+			SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Rearrange();
 		}else{
 			console.log("[PlayFilter] No containers found with media");
 		}
+		SVTPlayFilter.SetObserver(true);
+
+		window.addEventListener('replacestate', function(e) {
+		    console.log('buup!');
+		});
+
+		window.addEventListener('pushstate', function(e) {
+		    console.log('boop!');
+		});
+
+		window.addEventListener('popstate', function(e) {
+		    console.log('beep!');
+		});
 
 	}
 }else{
