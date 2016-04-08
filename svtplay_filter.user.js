@@ -157,19 +157,14 @@ SVTPlayFilter.Trigger["svtplay"] = {
 			return;
 		}
 
-		//video.PFix = true;
-
 		var ident = video.querySelector(".play_videolist-element__title-text, .play_videolist-element__title")
 		var ident_text = ident ? ident.textContent.trim() : false;
 
-		//console.info("[PlayFilter] Got video node ", ident_text);
 
 		if(!ident_text){ console.error("Couldn't find video info: ", ident, ident_text); return; }
 		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
 		
 		if(SVTPlayFilter.InFilter(ident_text)){
-			//console.info("[PlayFilter] Hide video ", ident_text);
-			//video.PFix = true;
 			SVTPlayFilter.CurrentlyHidden++;
 			SVTPlayFilter.StatusUpdate();
 			SVTPlayFilter.RemoveItem(video);
@@ -293,40 +288,79 @@ SVTPlayFilter.Trigger["oppetarkiv"] = {
 SVTPlayFilter.Trigger["mtg"] = {
 
 	Element: "div.clip",
+	CheckClass: "clip",
 
 	Update: function(){
-		var _this = SVTPlayFilter.Trigger["mtg"];
-		$( _this.Element ).each( function(){ _this.Func( $(this) ); } );
+		//var _this = SVTPlayFilter.Trigger["mtg"];
+		//$( _this.Element ).each( function(){ _this.Func( $(this) ); } );
 	},
 
 	Func: function(video){
 		
-		var link = video.attr("data-title");
-		//var link = raw.match(/([A-Za-z0-9\/_\-.]+)/)[0];
+		if(typeof video != "object") return;
+
+		if(!video.querySelector){
+			console.log("No querySelector for: ", typeof video, video);
+			return;
+		}
+
+		var ident_text = video.getAttribute("data-title");
+		if(!ident_text){
+			var h3 = video.querySelector("h3.clip-title")
+			if(h3){
+				ident_text = h3.textContent;
+			}
+		}
+
 		var _this = SVTPlayFilter.Trigger["mtg"];
 
-		if(!link) return;
+		if(!ident_text) return;
+
+		ident_text = ident_text.trim();
 		
-		if(SVTPlayFilter.InFilter(link)){
-			video.remove();
-			if(video.is(':last-child')) _this.Rearrange();
+		if(SVTPlayFilter.InFilter(ident_text)){
+			SVTPlayFilter.CurrentlyHidden++;
+			SVTPlayFilter.StatusUpdate();
+			SVTPlayFilter.RemoveItem(video);
+			SVTPlayFilter.InvalidLayout = true;
 			return;
-		}else{
-			if(video.is(':last-child')) _this.Rearrange();
 		}
 			
-		if(video.find("img.hidebutton").length==0){
-			var text = video.find("div.clip-additional-info");
-			var button = $(SVTPlayFilter.HTMLCross).prependTo(text);
-			button.click(function(e){
-				SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
-				SVTPlayFilter.AddFilter(link);
-				SVTPlayFilter.SaveData();
-				$(".popover").remove();
-				_this.Update();
+		if(!video.querySelector("img.playfilter-button-hide")){
+			var text = video.querySelector("div.clip-additional-info");
+			if(!text){
+				//console.error("[PlayFilter] Could not find place for button, try second: ", ident_text);
+				text = video.querySelector("h4.clip-secondary-title");
+				if(!text){
+					//console.error("[PlayFilter] Could not find place for button, try third: ", ident_text);
+					text = video.querySelector("h3.clip-title");
+					if(!text){
+						console.error("[PlayFilter] Could not find place for button, abort: ", ident_text);
+						return;
+					}
+				}
+			}
+			//text = text[0];
+			var button = document.createElement("img");
+			button.src = "data:image/png;base64," + SVTPlayFilter.IMG_CROSS;
+			button.className = "playfilter-button-hide";
+			button.title = "Hide show permanently";
+			button.onclick = function(e){
 				e.preventDefault();
+				e.stopPropagation();
+				SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
+				SVTPlayFilter.AddFilter(ident_text);
+				SVTPlayFilter.SaveData();
+				SVTPlayFilter.UpdateItems(null, video.parentNode);
+
+				var popout = document.querySelectorAll("div.popover")
+				if(popout){
+					for(var i in popout) popout[i].parentNode.removeChild(popout[i]);
+				}
+				//$("div.play_info-popoutbox").remove();	
 				return false;
-			});
+			}
+			text.insertBefore(button, text.firstChild);
 		}
 	},
 
