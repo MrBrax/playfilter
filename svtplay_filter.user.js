@@ -9,10 +9,11 @@
 // @include     http://www.tv8play.se/*
 // @include     http://www.tv10play.se/*
 // @include     http://www.dplay.se/*
+// @include     http://www.tv4play.se/*
 // @include     https://www.twitch.tv/directory/*
 // @require		https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js
 // @updateURL 	https://github.com/MrBrax/playfilter/raw/master/svtplay_filter.user.js
-// @version     1.48
+// @version     1.49
 // @grant       GM_getValue
 // @grant       GM_setValue
 // @grant       GM_addStyle
@@ -31,6 +32,7 @@ SVTPlayFilter.Data = {};
 SVTPlayFilter.Trigger = {};
 SVTPlayFilter.CurrentSite = "unknown";
 SVTPlayFilter.CurrentlyHidden = 0;
+SVTPlayFilter.FoundItems = 0;
 SVTPlayFilter.IndexedNodes = {};
 SVTPlayFilter.Ignore = {
 	"undefined":true,
@@ -53,7 +55,7 @@ GM_addStyle(".playfilter-bar:hover { color:#fff; background: rgba(0,0,0,.6); }")
 GM_addStyle(".playfilter-bar:hover img { opacity: 0.6; }");
 GM_addStyle(".playfilter-bar img:hover { opacity:1; }");
 GM_addStyle(".playfilter-bar-button { margin-right: 5px; }");
-GM_addStyle(".playfilter-bar-info { float:right; width:40px; text-align:center; }");
+GM_addStyle(".playfilter-bar-info { float:right; width:48px; text-align:center; }");
 GM_addStyle(".playfilter-button-hide { width:16px !important; height:16px !important; vertical-align:-3px; margin-right:4px; cursor:pointer; opacity:0.6; }");
 GM_addStyle(".playfilter-button-hide:hover { opacity:1; }");
 GM_addStyle("#playconfig { all:initial; * { all:unset; } }");
@@ -107,7 +109,7 @@ SVTPlayFilter.OpenConfig = function(){
 		var key = sortable[i];
 		if(SVTPlayFilter.Ignore[key]) continue;
 		//var short = key.substring(key.length-90,key.length);
-		videolist.append($("<option></option>").attr("value",key).text(key + " (" + key.length + ")")); 
+		videolist.append( $("<option></option>").attr("value",key).text(key) ); 
 	//});
 	}
 	
@@ -130,6 +132,7 @@ var matches = function(el, selector) {
   return (el.matches || el.matchesSelector || el.msMatchesSelector || el.mozMatchesSelector || el.webkitMatchesSelector || el.oMatchesSelector).call(el, selector);
 };
 
+// svtplay
 SVTPlayFilter.Trigger["svtplay"] = {
 
 	Element: "article.play_videolist-element",
@@ -138,15 +141,7 @@ SVTPlayFilter.Trigger["svtplay"] = {
 	CheckClass: "play_videolist-element",
 	CheckContainer: "div.play_content-grid",
 
-	Update: function(){
-		//var _this = SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ];
-		//var qs = document.querySelectorAll( _this.Element );
-		//if(qs){
-		//	for( i in qs ){
-		//		_this.Func( qs[i] );
-		//	}
-		//}
-	},
+	Update: function(){},
 
 	Func: function(video){
 
@@ -163,6 +158,8 @@ SVTPlayFilter.Trigger["svtplay"] = {
 
 		if(!ident_text){ console.error("Couldn't find video info: ", ident, ident_text); return; }
 		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
+
+		SVTPlayFilter.FoundItems++;
 		
 		if(SVTPlayFilter.InFilter(ident_text)){
 			SVTPlayFilter.CurrentlyHidden++;
@@ -172,7 +169,7 @@ SVTPlayFilter.Trigger["svtplay"] = {
 			return;
 		}
 
-		//if(video.PFix) return;
+		SVTPlayFilter.StatusUpdate();
 		
 		if(!video.querySelector("img.playfilter-button-hide")){
 			var text = video.querySelectorAll(".play_videolist-element__title-text, .play_videolist-element__title");
@@ -231,6 +228,7 @@ SVTPlayFilter.Trigger["svtplay"] = {
 
 }
 
+// oppetarkiv
 SVTPlayFilter.Trigger["oppetarkiv"] = {
 
 	Element: "article.svtUnit",
@@ -285,6 +283,7 @@ SVTPlayFilter.Trigger["oppetarkiv"] = {
 
 }
 
+// tv3play, tv6play, tv8play, tv10play
 SVTPlayFilter.Trigger["mtg"] = {
 
 	Element: "div.clip",
@@ -317,6 +316,8 @@ SVTPlayFilter.Trigger["mtg"] = {
 		if(!ident_text) return;
 
 		ident_text = ident_text.trim();
+
+		SVTPlayFilter.FoundItems++;
 		
 		if(SVTPlayFilter.InFilter(ident_text)){
 			SVTPlayFilter.CurrentlyHidden++;
@@ -325,6 +326,8 @@ SVTPlayFilter.Trigger["mtg"] = {
 			SVTPlayFilter.InvalidLayout = true;
 			return;
 		}
+
+		SVTPlayFilter.StatusUpdate();
 			
 		if(!video.querySelector("img.playfilter-button-hide")){
 			var text = video.querySelector("div.clip-additional-info");
@@ -368,6 +371,7 @@ SVTPlayFilter.Trigger["mtg"] = {
 
 }
 
+// dplay
 SVTPlayFilter.Trigger["dplay"] = {
 
 	Element: "div.catalogue-item, a.listing-item",
@@ -404,6 +408,8 @@ SVTPlayFilter.Trigger["dplay"] = {
 			video.parentNode.removeChild(video);
 			return;
 		}
+
+		SVTPlayFilter.FoundItems++;
 		
 		if(SVTPlayFilter.InFilter(ident_text)){
 			//console.info("[PlayFilter] Hide video ", ident_text);
@@ -414,6 +420,8 @@ SVTPlayFilter.Trigger["dplay"] = {
 			SVTPlayFilter.InvalidLayout = true;
 			return;
 		}
+
+		SVTPlayFilter.StatusUpdate();
 			
 		if(!video.querySelector("img.playfilter-button-hide")){
 
@@ -447,6 +455,7 @@ SVTPlayFilter.Trigger["dplay"] = {
 
 }
 
+// twitch
 SVTPlayFilter.Trigger["twitch"] = {
 
 	Element: "div.js-streams",
@@ -497,11 +506,87 @@ SVTPlayFilter.Trigger["twitch"] = {
 
 }
 
+// svtplay
+SVTPlayFilter.Trigger["tv4play"] = {
+
+	Element: "li.card",
+
+	CheckType: "article",
+	CheckClass: "card",
+	CheckContainer: "div.js-auto-load-more-container",
+
+	Update: function(){},
+
+	Func: function(video){
+
+		if(typeof video != "object") return;
+
+		if(!video.querySelector){
+			console.log("No querySelector for: ", typeof video, video);
+			return;
+		}
+
+		var ident = video.querySelector("h3.card__info-title")
+		var ident_text = ident ? ident.textContent.trim() : false;
+
+
+		if(!ident_text){ console.error("Couldn't find video info: ", ident, ident_text); return; }
+		var _this = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
+
+		SVTPlayFilter.FoundItems++;
+
+		if( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium && video.querySelector("span.premium-badge") ){
+			console.info("[PlayFilter] Hide premium video ", ident_text);
+			video.parentNode.removeChild(video);
+			return;
+		}
+		
+		if(SVTPlayFilter.InFilter(ident_text)){
+			SVTPlayFilter.CurrentlyHidden++;
+			SVTPlayFilter.StatusUpdate();
+			SVTPlayFilter.RemoveItem(video);
+			SVTPlayFilter.InvalidLayout = true;
+			return;
+		}
+
+		SVTPlayFilter.StatusUpdate();
+		
+		if(!video.querySelector("img.playfilter-button-hide")){
+			var text = video.querySelectorAll("h3.card__info-title");
+			if(!text){
+				console.error("[PlayFilter] Could not find place for button: ", ident_text);
+				return;
+			}
+			text = text[0];
+			//console.log( "[PlayFilter] Found title node: ", text );
+			var button = document.createElement("img");
+			button.src = "data:image/png;base64," + SVTPlayFilter.IMG_CROSS;
+			button.className = "playfilter-button-hide";
+			button.title = "Hide show permanently";
+			button.onclick = function(e){
+				e.preventDefault();
+				e.stopPropagation();
+				SVTPlayFilter.LoadData(); // to prevent overwriting other tabs
+				SVTPlayFilter.AddFilter(ident_text);
+				SVTPlayFilter.SaveData();
+				SVTPlayFilter.UpdateItems(null, video.parentNode);	
+				return false;
+			}
+			text.insertBefore(button, text.firstChild);
+		}
+
+	},
+
+	Rearrange: function( block, force ){}
+
+}
+
 if( document.querySelector("a.svtoa_logo, div.svtGridBlock") ) SVTPlayFilter.CurrentSite = "oppetarkiv";
 if( document.querySelector("a.play_logo") ) SVTPlayFilter.CurrentSite = "svtplay";
 if( document.querySelector("img.mtg-logo") ) SVTPlayFilter.CurrentSite = "mtg";
 if( document.querySelector("div.header-dplay-logo-container") ) SVTPlayFilter.CurrentSite = "dplay";
 if( location.href.match(/twitch\.tv\/directory/) ) SVTPlayFilter.CurrentSite = "twitch";
+if( location.href.match(/tv4play\.se/) ) SVTPlayFilter.CurrentSite = "tv4play";
 
 console.log("[PlayFilter] Setting site to '" + SVTPlayFilter.CurrentSite + "' on '" + location.href + "'.");
 
@@ -572,7 +657,13 @@ SVTPlayFilter.SaveData = function(){
 SVTPlayFilter.StatusUpdate = function(){
 	console.log("[PlayFilter] Update status counters");
 	var num = document.getElementById("playfilter-bar-num");
-	if(num){ num.innerHTML = "<span title='Hidden'>" + SVTPlayFilter.CurrentlyHidden + "</span><br><span title='Block list size'>" + Object.keys(SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide).length + "</span>"; }else{ console.error("no num found"); }
+	if(num){ 
+		num.innerHTML = "<span title='Hidden'>" + SVTPlayFilter.CurrentlyHidden + "</span>/<span title='Items found'>" + SVTPlayFilter.FoundItems +
+		"</span><br><span title='Block list size'>" + Object.keys(SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide).length + 
+		"</span>"; 
+	}else{ 
+		console.error("no num found");
+	}
 }
 
 SVTPlayFilter.SetObserver = function( state ){
