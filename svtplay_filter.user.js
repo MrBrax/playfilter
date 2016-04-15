@@ -13,14 +13,11 @@
 // @include     https://www.twitch.tv/directory/*
 // @require		https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js
 // @updateURL 	https://github.com/MrBrax/playfilter/raw/master/svtplay_filter.user.js
-// @version     1.49
+// @version     1.51
 // @grant       GM_getValue
 // @grant       GM_setValue
 // @grant       GM_addStyle
 // ==/UserScript==
-
-// TODO: Transition from jQuery
-// TODO: Transition from the old observer
 
 SVTPlayFilter = {};
 SVTPlayFilter.IMG_CROSS 		= "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAC30lEQVRYhe2WP2gTURzHf2CEIh1ErGCb97uHdsjQoWCHDh0yuChWOrTQocPl/S4hFIcMHXQqTgXBURw6duiQ0cHBwcFBUbHo4lAwSMrd/V7ADBk6dDiHXNK7y+XuCs0N4g/eknt3n+/3/f68APyPnMKV1rIW9J6ROi6qRq5wjWqFkXqM5PnrVM9sT+cCZ0FrjHQUgHuM9K1j1G5PHB7j3GOkMwcr6xOHj3HezSX/E4Hb0ixptPY0qiYL+shI7eDHGamlUa1c6rF3pXmdhar7QC9puagalwb37tWuOgY9YbR+pIEZ6dRF9TTp2G1pljwoFzLBT+asokbrTQZwJueBZx9O5qxiItwpWmU/n1HQcSDnp2zQW995VnjgRCqPYuFjPuSwUHUPygVG6jCS5wpaAADQM9vTadXuP2/HiQvDZXUxCteomi1pTgEA6CLNDwSlCB46t4VaAvALGekguk+jWgGAfnsxkhPeYL0OFk1AgGdLs5TkfCBsIOBcsLUX2d/TsroIGulL5MFBXIoGAFeox+PgrqBNjeonG6R7d+u3RtM8IuII+u0WVsaC1uJqRBvWwxjB3dFitN5F33cFLYyctEE74MHGFUb1Ipx/+qORngXTEJ+qfs6Hzvu//WJU98PiaYMN+h6Bv7Rna9cAAMCDckGjakbbTyPtAwC4SKsa1ed059RjtLbO06buMNJzFvQ79K6gV+0i3QgdkQflgjboMLhxMMXGOQ/Au9qgQ0eaEgCgJc0pV9AmI7VGTalm4lRkVLtZ4AAAtlBLukjzemZ72pZmycHKut9y0fb0GOmMUe1mGsm2NEsZnbc5fnJG15GW1cVU8LBojOoDFvQpQ87T1jEbtJP5Ihq4z+A8CdrTSPvDSXeR6CCtMtLXOOdDgbO1m7ZQSyxozUXVcFE1HKysu9JaTr3tkiJ2UOT1BxIAINqCUecTj0jP5uf8XIC1xf07vx13F+QSLWlOXahl/oX4C5DN/R7VUqVHAAAAAElFTkSuQmCC";
@@ -58,31 +55,47 @@ GM_addStyle(".playfilter-bar-button { margin-right: 5px; }");
 GM_addStyle(".playfilter-bar-info { float:right; width:48px; text-align:center; }");
 GM_addStyle(".playfilter-button-hide { width:16px !important; height:16px !important; vertical-align:-3px; margin-right:4px; cursor:pointer; opacity:0.6; }");
 GM_addStyle(".playfilter-button-hide:hover { opacity:1; }");
+GM_addStyle(".playfilter-info { margin:10px 0; background:#222; padding:5px; }");
+GM_addStyle(".playfilter-credits { margin:10px 0 0 0; background:#222; padding:5px; font-size:12px; color:#888; }");
 GM_addStyle("#playconfig { all:initial; * { all:unset; } }");
-GM_addStyle("#playconfig { font-size:18px; font: 14px Arial; background:#111; color:#dfd; padding:20px; position:fixed; width:800px; margin-left:-410px; left:50%; top:50px; z-index:9999999 }");
+GM_addStyle("#playconfig a { color:#e88; text-decoration: none; }");
+GM_addStyle("#playconfig { font-size:18px; font: 14px Arial; background:#111; color:#dfd; padding:20px; position:fixed; width:800px; margin-left:-410px; left:50%; top:50px; z-index:9999999; }");
 GM_addStyle("#playconfig h1 { font-size:24px; font-weight:bold; }");
 GM_addStyle("#playconfig input, #playconfig button, #playconfig select { font-size:14px; font-family:Arial; padding:2px 6px; border:1px solid #888; background:#000; border-radius:0; margin:2px; color:#eee; }");
+GM_addStyle("#playconfig button { font-size: 18px; }");
 GM_addStyle("#playconfig select { font-size: 14px; width:800px }");
-//GM_addStyle("#playconfig button { font-size:14px; font-family:monospace; padding:2px 6px; border:1px solid #0f0; background:#000; border-radius:0; margin:2px; color:#0f0; }");
+GM_addStyle("#playconfig-black { background: rgba(0,0,0,.8); position:fixed; top:0; bottom:0; left:0; right:0; z-index:9999998; }");
 
 SVTPlayFilter.OpenConfig = function(){
 
 	SVTPlayFilter.LoadData();
 	
-	var conf = "<div id='playconfig'></div>";
+	var html_black = "<div id='playconfig-black'></div>";
+	var html_conf = "<div id='playconfig'></div>";
 	
-	var w = $(conf).appendTo("body");
+	var b = $(html_black).appendTo("body");
+	var w = $(html_conf).appendTo("body");
+
+	var Trigger = SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite];
 	
 	$("<h1>PlayFilter v" + GM_info.script.version + " config (" + SVTPlayFilter.CurrentSite + ")</h1>").appendTo(w);
-	
-	var rearrange = $("<input type='checkbox' " + ( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].DisableRearrange ? "checked='checked'" : "") + ">").appendTo(w);
-	$("<span> Disable rearranging of items after hiding</span>").appendTo(w);
 
-	var hidepremium = $("<br><input type='checkbox' " + ( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium ? "checked='checked'" : "") + ">").appendTo(w);
-	$("<span> Hide premium/subscription videos</span>").appendTo(w);
+	if( Trigger.InfoText ){
+		$( "<div class='playfilter-info'>" + Trigger.InfoText + "</div>" ).appendTo(w);
+	}
+	
+	if( Trigger.Rearrange ){
+		var rearrange = $("<input type='checkbox' " + ( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].DisableRearrange ? "checked='checked'" : "") + ">").appendTo(w);
+		$("<span> Disable rearranging of items after hiding</span>").appendTo(w);
+	}
+
+	if( Trigger.HasPremium ){
+		var hidepremium = $("<br><input type='checkbox' " + ( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium ? "checked='checked'" : "") + ">").appendTo(w);
+		$("<span> Hide premium/subscription videos</span>").appendTo(w);
+	}
 
 	// video list
-	var videolist = $("<br><br>Video list<br><select multiple size=12></select>").appendTo(w);
+	var videolist = $("<br><br>Hide list<br><select multiple size=12></select>").appendTo(w);
 	var videolist_remove = $("<br><button>Remove</button>").appendTo(w).click(function(){
 		$('option:selected', videolist).each(function(){
 			delete SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide[ $(this).val() ];
@@ -118,13 +131,22 @@ SVTPlayFilter.OpenConfig = function(){
 		SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium = hidepremium.is(":checked");
 		SVTPlayFilter.SaveData();
 		SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Update();
+		b.remove();
 		w.remove();
 	});
-	
+
 	$(" <button>Close</button>").appendTo(w).click(function(){
+		b.remove();
 		w.remove();
 	});
-	
+
+	b.click(function(){
+		b.remove();
+		w.remove();
+	});
+
+	$('<div class="playfilter-credits">UserScript made by MrBrax, because the lack of good TV shows.<br>Refresh icon made by <a href="http://www.flaticon.com/authors/dave-gandy" title="Dave Gandy">Dave Gandy</a> from <a href="http://www.flaticon.com" title="Flaticon">www.flaticon.com</a> is licensed by <a href="http://creativecommons.org/licenses/by/3.0/" title="Creative Commons BY 3.0" target="_blank">CC 3.0 BY</a><br>Lamp icon made by <a href="http://www.icojam.com/" target="_blank">Icojam</a></div>').appendTo(w)
+
 }
 
 // helper funcs
@@ -140,6 +162,8 @@ SVTPlayFilter.Trigger["svtplay"] = {
 	CheckType: "article",
 	CheckClass: "play_videolist-element",
 	CheckContainer: "div.play_content-grid",
+
+	InfoText: "<b>Known issues:</b><br>Breaks the navigation bar, you have to refresh the page.",
 
 	Update: function(){},
 
@@ -294,6 +318,8 @@ SVTPlayFilter.Trigger["mtg"] = {
 		//$( _this.Element ).each( function(){ _this.Func( $(this) ); } );
 	},
 
+	HasPremium: true,
+
 	Func: function(video){
 		
 		if(typeof video != "object") return;
@@ -365,9 +391,7 @@ SVTPlayFilter.Trigger["mtg"] = {
 			}
 			text.insertBefore(button, text.firstChild);
 		}
-	},
-
-	Rearrange: function(){}
+	}
 
 }
 
@@ -377,6 +401,10 @@ SVTPlayFilter.Trigger["dplay"] = {
 	Element: "div.catalogue-item, a.listing-item",
 
 	CheckClass: ["catalogue-item", "listing-item"],
+
+	InfoText: "<b>Known issues:</b><br>Does not always refresh/inject automatically.",
+
+	HasPremium: true,
 
 	Update: function(){
 		var _this = SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ];
@@ -449,9 +477,7 @@ SVTPlayFilter.Trigger["dplay"] = {
 				list_title[0].insertBefore(button, list_title[0].firstChild);
 			}
 		}
-	},
-
-	Rearrange: function(){}
+	}
 
 }
 
@@ -482,10 +508,10 @@ SVTPlayFilter.Trigger["twitch"] = {
 		
 		if(SVTPlayFilter.InFilter(ident)){
 			video.remove();
-			if(video.is(':last-child')) _this.Rearrange();
+			//if(video.is(':last-child')) _this.Rearrange();
 			return;
 		}else{
-			if(video.is(':last-child')) _this.Rearrange();
+			//if(video.is(':last-child')) _this.Rearrange();
 		}
 			
 		if(video.find("img.hidebutton").length==0){
@@ -500,9 +526,9 @@ SVTPlayFilter.Trigger["twitch"] = {
 				return false;
 			});
 		}
-	},
+	}
 
-	Rearrange: function(){}
+	//Rearrange: function(){}
 
 }
 
@@ -514,6 +540,8 @@ SVTPlayFilter.Trigger["tv4play"] = {
 	CheckType: "article",
 	CheckClass: "card",
 	CheckContainer: "div.js-auto-load-more-container",
+
+	HasPremium: true,
 
 	Update: function(){},
 
@@ -575,9 +603,7 @@ SVTPlayFilter.Trigger["tv4play"] = {
 			text.insertBefore(button, text.firstChild);
 		}
 
-	},
-
-	Rearrange: function( block, force ){}
+	}
 
 }
 
@@ -646,7 +672,7 @@ SVTPlayFilter.RemoveFilter = function(img){
 
 SVTPlayFilter.RemoveItem = function(el){
 	el.parentNode.removeChild(el);
-	if( matches(el, ':last-child') ) SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Rearrange();
+	if( matches(el, ':last-child') && SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Rearrange ) SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Rearrange();
 }
 
 SVTPlayFilter.SaveData = function(){
@@ -685,7 +711,7 @@ SVTPlayFilter.UpdateItems = function( sIdent, aBlock, bForce ){
 			SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ].Func( vids[i] );
 		}
 	}
-	SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ].Rearrange( aBlock, bForce );
+	if (SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Rearrange) SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ].Rearrange( aBlock, bForce );
 	SVTPlayFilter.SetObserver(true);
 	//myObserver.observe(document, obsConfig);
 }
@@ -705,38 +731,14 @@ if(SVTPlayFilter.CurrentSite != "unknown"){
 
 				mutationRecords.forEach ( function (mutation) {
 
-					//SVTPlayFilter.SetObserver(false);
-
 					if ( mutation.type == "childList" && typeof mutation.addedNodes == "object" && mutation.addedNodes.length ) {
-
-						//console.log("MutationEvent child");
 						
 						for (var J = 0, L = mutation.addedNodes.length;  J < L;  ++J) {
-							//SVTPlayFilter.UpdateItems( mutation.addedNodes[J] );
-							//if(mutation.addedNodes[J].PFix) continue;
-							//mutation.addedNodes[J].PFix = true
-							//console.log("multi level", mutation.addedNodes);
-							//var vids = mutation.addedNodes[J].querySelectorAll( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element );
-							//if(vids){
-							//	for(var i in vids ){
-							//		console.log("Mutation child func ", i, vids[i]);
-							//		SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( vids[i] );
-							//	}
-							//}else{
-							//	console.log("No mutation children");
-							//}
-							//console.log("!! Mutation child loop ", mutation.addedNodes[J].className );
 							checkForCSS_Class(mutation.addedNodes[J], cClass)
-							
 						}
 
 					}else if (mutation.type == "attributes") {
-						//if(mutation.target.PFix) return;
-						//mutation.target.PFix = true
-						//console.log("!! MutationEvent attribute", mutation.target.className );
-						//SVTPlayFilter.UpdateItems( mutation.target );
-						//console.log("!! Mutation attribute func ", mutation.target);
-						//checkForCSS_Class(mutation.target, cClass );
+						// maybe add stuff here sometime
 					}
 				});
 
@@ -744,8 +746,6 @@ if(SVTPlayFilter.CurrentSite != "unknown"){
 				//SVTPlayFilter.SetObserver(true);
 			}
 
-			//if(SVTPlayFilter.InvalidLayout) SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Rearrange();
-			
 		}
 
 		function checkForCSS_Class (node, className) {
@@ -842,7 +842,7 @@ if(SVTPlayFilter.CurrentSite != "unknown"){
 				init_videos[i].PFix = false;
 				SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Func( init_videos[i] );
 			}
-			SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Rearrange();
+			if( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Rearrange ) SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Rearrange();
 		}else{
 			console.log("[PlayFilter] No containers found with media");
 		}
