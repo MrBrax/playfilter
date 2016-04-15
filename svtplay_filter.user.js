@@ -13,7 +13,7 @@
 // @include     https://www.twitch.tv/directory/*
 // @require		https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js
 // @updateURL 	https://github.com/MrBrax/playfilter/raw/master/svtplay_filter.user.js
-// @version     1.51
+// @version     1.52
 // @grant       GM_getValue
 // @grant       GM_setValue
 // @grant       GM_addStyle
@@ -55,15 +55,17 @@ GM_addStyle(".playfilter-bar-button { margin-right: 5px; }");
 GM_addStyle(".playfilter-bar-info { float:right; width:48px; text-align:center; }");
 GM_addStyle(".playfilter-button-hide { width:16px !important; height:16px !important; vertical-align:-3px; margin-right:4px; cursor:pointer; opacity:0.6; }");
 GM_addStyle(".playfilter-button-hide:hover { opacity:1; }");
-GM_addStyle(".playfilter-info { margin:10px 0; background:#222; padding:5px; }");
+GM_addStyle(".playfilter-info { margin:10px 0 0 0; background:#222; padding:5px; }");
 GM_addStyle(".playfilter-credits { margin:10px 0 0 0; background:#222; padding:5px; font-size:12px; color:#888; }");
 GM_addStyle("#playconfig { all:initial; * { all:unset; } }");
+GM_addStyle("#playconfig { font: 14px Arial; background:#111; color:#dfd; padding:20px; position:fixed; width:800px; margin-left:-410px; left:50%; top:50px; z-index:9999999; }");
 GM_addStyle("#playconfig a { color:#e88; text-decoration: none; }");
-GM_addStyle("#playconfig { font-size:18px; font: 14px Arial; background:#111; color:#dfd; padding:20px; position:fixed; width:800px; margin-left:-410px; left:50%; top:50px; z-index:9999999; }");
-GM_addStyle("#playconfig h1 { font-size:24px; font-weight:bold; }");
+GM_addStyle("#playconfig h1 { font:24px Arial; font-weight:700; margin: 0 0 10px 0; }");
+GM_addStyle("#playconfig h2 { font:18px Arial; font-weight:700; margin: 0 0 5px 0; }");
 GM_addStyle("#playconfig input, #playconfig button, #playconfig select { font-size:14px; font-family:Arial; padding:2px 6px; border:1px solid #888; background:#000; border-radius:0; margin:2px; color:#eee; }");
-GM_addStyle("#playconfig button { font-size: 18px; }");
-GM_addStyle("#playconfig select { font-size: 14px; width:800px }");
+GM_addStyle("#playconfig button { font: 18px Arial; font-weight: 800; text-style:uppercase; }");
+GM_addStyle("#playconfig button:hover { background:#333; color:#fff; }");
+GM_addStyle("#playconfig select { font: 14px Arial; width:800px }");
 GM_addStyle("#playconfig-black { background: rgba(0,0,0,.8); position:fixed; top:0; bottom:0; left:0; right:0; z-index:9999998; }");
 
 SVTPlayFilter.OpenConfig = function(){
@@ -81,8 +83,11 @@ SVTPlayFilter.OpenConfig = function(){
 	$("<h1>PlayFilter v" + GM_info.script.version + " config (" + SVTPlayFilter.CurrentSite + ")</h1>").appendTo(w);
 
 	if( Trigger.InfoText ){
+		$( "<h2>Site info</h2>" ).appendTo(w);
 		$( "<div class='playfilter-info'>" + Trigger.InfoText + "</div>" ).appendTo(w);
 	}
+
+	$( "<br><h2>Site settings</h2>" ).appendTo(w);
 	
 	if( Trigger.Rearrange ){
 		var rearrange = $("<input type='checkbox' " + ( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].DisableRearrange ? "checked='checked'" : "") + ">").appendTo(w);
@@ -90,12 +95,13 @@ SVTPlayFilter.OpenConfig = function(){
 	}
 
 	if( Trigger.HasPremium ){
-		var hidepremium = $("<br><input type='checkbox' " + ( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium ? "checked='checked'" : "") + ">").appendTo(w);
+		var hidepremium = $( (Trigger.Rearrange ? "<br>" : "") + "<input type='checkbox' " + ( SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].HidePremium ? "checked='checked'" : "") + ">").appendTo(w);
 		$("<span> Hide premium/subscription videos</span>").appendTo(w);
 	}
 
 	// video list
-	var videolist = $("<br><br>Hide list<br><select multiple size=12></select>").appendTo(w);
+	$("<br><br><h2>Hide list</h2>").appendTo(w);
+	var videolist = $("<select multiple size=12></select>").appendTo(w);
 	var videolist_remove = $("<br><button>Remove</button>").appendTo(w).click(function(){
 		$('option:selected', videolist).each(function(){
 			delete SVTPlayFilter.Data[SVTPlayFilter.CurrentSite].Hide[ $(this).val() ];
@@ -700,20 +706,26 @@ SVTPlayFilter.SetObserver = function( state ){
 }
 
 SVTPlayFilter.UpdateItems = function( sIdent, aBlock, bForce ){
-	//if(SVTPlayFilter.Searching){ console.log("UpdateItems - searching " + SVTPlayFilter.Searching + ";"); return; }
+
 	console.log("[PlayFilter] Update items, ident: " + sIdent + ", arrange: " + aBlock );
+
 	SVTPlayFilter.SetObserver(false);
-	//myObserver.disconnect();
+
+	SVTPlayFilter.FoundItems = 0;
+	
 	var vids = ( sIdent ? sIdent : document ).querySelectorAll( SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Element );
+	
 	if(vids){
 		for(var i in vids ){
 			vids[i].PFix = false;
 			SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ].Func( vids[i] );
 		}
 	}
+	
 	if (SVTPlayFilter.Trigger[SVTPlayFilter.CurrentSite].Rearrange) SVTPlayFilter.Trigger[ SVTPlayFilter.CurrentSite ].Rearrange( aBlock, bForce );
+	
 	SVTPlayFilter.SetObserver(true);
-	//myObserver.observe(document, obsConfig);
+
 }
 
 if(SVTPlayFilter.CurrentSite != "unknown"){
