@@ -4,16 +4,13 @@
 // @description Hide unwanted shows from VOD sites.
 // @include     http://www.svtplay.se/*
 // @include     http://www.oppetarkiv.se/*
-// @include     http://www.tv6play.se/*
-// @include     http://www.tv3play.se/*
-// @include     http://www.tv8play.se/*
-// @include     http://www.tv10play.se/*
+// @include     http://www.viafree.se/*
 // @include     http://www.dplay.se/*
 // @include     http://www.tv4play.se/*
 // @include     https://www.twitch.tv/directory/*
 // @require		https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js
 // @updateURL 	https://github.com/MrBrax/playfilter/raw/master/svtplay_filter.user.js
-// @version     1.52
+// @version     1.53
 // @grant       GM_getValue
 // @grant       GM_setValue
 // @grant       GM_addStyle
@@ -314,10 +311,10 @@ SVTPlayFilter.Trigger["oppetarkiv"] = {
 }
 
 // tv3play, tv6play, tv8play, tv10play
-SVTPlayFilter.Trigger["mtg"] = {
+SVTPlayFilter.Trigger["viafree"] = {
 
-	Element: "div.clip",
-	CheckClass: "clip",
+	Element: "div.subway-item",
+	CheckClass: "subway-item",
 
 	Update: function(){
 		//var _this = SVTPlayFilter.Trigger["mtg"];
@@ -335,12 +332,12 @@ SVTPlayFilter.Trigger["mtg"] = {
 			return;
 		}
 
-		var ident_text = video.getAttribute("data-title");
+		var ident_text = video.querySelector("a.thumbnail-format").textContent.trim();
 		if(!ident_text){
-			var h3 = video.querySelector("h3.clip-title")
-			if(h3){
-				ident_text = h3.textContent;
-			}
+			//var h3 = video.querySelector("h3.clip-title")
+			//if(h3){
+			//	ident_text = h3.textContent;
+			//}
 		}
 
 		var _this = SVTPlayFilter.Trigger["mtg"];
@@ -362,13 +359,13 @@ SVTPlayFilter.Trigger["mtg"] = {
 		SVTPlayFilter.StatusUpdate();
 			
 		if(!video.querySelector("img.playfilter-button-hide")){
-			var text = video.querySelector("div.clip-additional-info");
+			var text = video.querySelector("a.thumbnail-format");
 			if(!text){
 				//console.error("[PlayFilter] Could not find place for button, try second: ", ident_text);
-				text = video.querySelector("h4.clip-secondary-title");
+				//text = video.querySelector("h4.clip-secondary-title");
 				if(!text){
 					//console.error("[PlayFilter] Could not find place for button, try third: ", ident_text);
-					text = video.querySelector("h3.clip-title");
+					//text = video.querySelector("h3.clip-title");
 					if(!text){
 						console.error("[PlayFilter] Could not find place for button, abort: ", ident_text);
 						return;
@@ -388,10 +385,10 @@ SVTPlayFilter.Trigger["mtg"] = {
 				SVTPlayFilter.SaveData();
 				SVTPlayFilter.UpdateItems(null, video.parentNode);
 
-				var popout = document.querySelectorAll("div.popover")
-				if(popout){
-					for(var i in popout) popout[i].parentNode.removeChild(popout[i]);
-				}
+				//var popout = document.querySelectorAll("div.popover")
+				//if(popout){
+				//	for(var i in popout) popout[i].parentNode.removeChild(popout[i]);
+				//}
 				//$("div.play_info-popoutbox").remove();	
 				return false;
 			}
@@ -615,7 +612,7 @@ SVTPlayFilter.Trigger["tv4play"] = {
 
 if( document.querySelector("a.svtoa_logo, div.svtGridBlock") ) SVTPlayFilter.CurrentSite = "oppetarkiv";
 if( document.querySelector("a.play_logo") ) SVTPlayFilter.CurrentSite = "svtplay";
-if( document.querySelector("img.mtg-logo") ) SVTPlayFilter.CurrentSite = "mtg";
+if( location.href.match(/viafree\.se/) ) SVTPlayFilter.CurrentSite = "viafree";
 if( document.querySelector("div.header-dplay-logo-container") ) SVTPlayFilter.CurrentSite = "dplay";
 if( location.href.match(/twitch\.tv\/directory/) ) SVTPlayFilter.CurrentSite = "twitch";
 if( location.href.match(/tv4play\.se/) ) SVTPlayFilter.CurrentSite = "tv4play";
